@@ -2,3 +2,5 @@ xarray
 pandas
 numpy
 scipy
+dash
+plotly

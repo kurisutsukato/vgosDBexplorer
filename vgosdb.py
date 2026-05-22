@@ -1,11 +1,13 @@
 import tarfile
 from io import BytesIO
 from pathlib import PurePosixPath
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
 import xarray as xr
 
+from calc import radec_to_azel
 
 class VGOSFile:
 
@@ -26,31 +28,19 @@ class VGOSFile:
     @classmethod
     def _decode_array(cls, arr):
 
-        return [
+        return np.asarray([
             cls._decode_scalar(x)
             for x in arr.flatten()
-        ]
+        ])
 
     def value(self, variable):
-
         da = self.ds[variable]
-
         values = da.values
 
-        #
-        # scalar
-        #
-
         if values.shape == ():
-
             return self._decode_scalar(values.item())
 
-        #
-        # byte string arrays
-        #
-
         if values.dtype.kind == "S":
-
             return self._decode_array(values)
 
         return values
@@ -72,35 +62,36 @@ class VGOSFile:
 class VGOSStation:
 
     def __init__(self, name, session):
-
         self.name = name
         self.session = session
         self._files = {}
 
-    def add_file(self, dataset_name, path):
+    def coords(self):
+        df = pd.DataFrame(data=[])
+        print(self.session['Apriori/Station'].value('AprioriStationList'))
+        print(self.session['Apriori/Station'].value('AprioriStationXYZ'))
+        data = np.hstack((self.session['Apriori/Station'].value('AprioriStationList')[:,None],
+                          self.session['Apriori/Station'].value('AprioriStationXYZ')))
+        df = pd.DataFrame(data=data, columns=['station','X','Y','Z'])
+        df = df[df.station == self.name]
 
+    def add_file(self, dataset_name, path):
         self._files[dataset_name] = path
 
     @property
-    def files(self):
-
+    def datasets(self):
         return sorted(self._files.keys())
 
     def load(self, dataset_name):
-
         path = self._files[dataset_name]
-
         return self.session._load_path(path)
 
-    def __getattr__(self, item):
-
+    def __getitem__(self, item):
         if item in self._files:
             return self.load(item)
-
-        raise AttributeError(item)
+        raise KeyError(item)
 
     def __repr__(self):
-
         return (
             f"VGOSStation("
             f"name='{self.name}', "
@@ -158,81 +149,78 @@ class VGOSSession:
             return self._cache[path]
 
         with tarfile.open(self.archive_path, "r:gz") as tar:
-
             member = self._members[path]
-
             raw = tar.extractfile(member).read()
 
         ds = xr.open_dataset(BytesIO(raw))
-
         wrapped = VGOSFile(path, ds)
-
         self._cache[path] = wrapped
 
         return wrapped
+
+    def _find_baselines(self):
+        bl = np.asarray(self['Observables/Baseline'].value('Baseline')).reshape(-1,2)
+        hm = np.asarray(self['Observables/TimeUTC'].value('YMDHM'))+[2000,0,0,0,0]
+        s = np.asarray(self['Observables/TimeUTC'].value('Second'), dtype=int)
+        src = np.asarray(self['Observables/Source'].value('Source'))
+
+        hms = np.hstack((hm, s[:,None]))
+        dt = [datetime(*q) for q in hms]
+
+        apsrc = self['Apriori/Source']
+        srclist = pd.DataFrame(np.hstack((apsrc.value('AprioriSourceList')[:,None], apsrc.value('AprioriSource2000RaDec'))),
+                                    columns=['src','ra','dec']).astype({'src':str, 'ra': float, 'dec': float})
+        df = pd.DataFrame(data=np.vstack((dt, bl.T, src[None,:])).T, columns=['dt','st1','st2','src'])
+        df = df.merge(srclist, on='src')
+
+        apst = self['Apriori/Station']
+        stlist = pd.DataFrame(np.hstack((apst.value('AprioriStationList')[:,None], apst.value('AprioriStationXYZ'))),
+                              columns=['station','x','y','z']).astype({'x': float, 'y': float, 'z': float})
+
+        df = df.merge(stlist, left_on='st1', right_on='station', suffixes=('1', '2')).drop('station', axis=1)
+        df = df.merge(stlist, left_on='st2', right_on='station', suffixes=('1', '2')).drop('station', axis=1)
+
+        df[['az1','el1']] = radec_to_azel(*[df[q].to_numpy() for q in ['ra','dec','dt','x1','y1','z1']])
+        df[['az2','el2']] = radec_to_azel(*[df[q].to_numpy() for q in ['ra','dec','dt','x2','y2','z2']])
+
+        self.baselines = df
+
+        df[['ra','dec','dt',]]
+        #print(df.to_numpy().T)
 
     def _find_head(self):
 
         for path in self._members:
 
             p = PurePosixPath(path)
-
             if len(p.parts) == 2 and p.name == "Head.nc":
-
                 return path
 
         raise RuntimeError("Head.nc not found")
 
     def _detect_stations(self):
-
-        #
-        # load Head.nc
-        #
-
         head_path = self._find_head()
-
         self.Head = self._load_path(head_path)
-
         station_names = set(self.Head["StationList"])
-
-        #
-        # classify datasets
-        #
 
         for path in self._members:
 
             p = PurePosixPath(path)
 
-            #
-            # remove root folder
-            #
-
             rel = PurePosixPath(*p.parts[1:])
-
             parts = rel.parts
-
             filename = rel.stem
 
-            #
-            # top-level dataset
-            #
-
             if len(parts) == 1:
-
-                self.datasets[filename] = path
-
+                self.datasets[str(rel)] = path
                 continue
 
             top_folder = parts[0]
 
-            #
             # station datasets
-            #
-
             if top_folder in station_names:
 
                 if top_folder not in self.stations:
-
                     self.stations[top_folder] = (
                         VGOSStation(top_folder, self)
                     )
@@ -243,14 +231,11 @@ class VGOSSession:
                 )
 
             else:
-
-                #
-                # shared non-station datasets
-                #
-
                 key = str(rel.with_suffix(""))
-
                 self.datasets[key] = path
+
+        self._find_baselines()
+
 
     @property
     def station_names(self):
@@ -386,25 +371,15 @@ class VGOSSession:
 
         return pd.DataFrame(rows)
 
-    def __getattr__(self, item):
-
-        #
+    def __getitem__(self, item):
         # top-level datasets
-        #
-
         if item in self.datasets:
-
             return self.load_dataset(item)
 
-        #
         # stations
-        #
-
         if item in self.stations:
-
             return self.stations[item]
-
-        raise AttributeError(item)
+        raise KeyError(item)
 
     def __repr__(self):
 
@@ -416,9 +391,22 @@ class VGOSSession:
         )
 
 if __name__ == '__main__':
-    session = VGOSSession("./20210531-r11001.tgz")
-    print(session.dataset_names)
-    print(session.station_names)
+    pd.set_option('display.max_columns', None)
 
-    print(session.AGGO.files)
+    session = VGOSSession("./R11001.tgz")
+    #print(session.dataset_names)
+    #print(session.station_names)
+    #for f in session.HART15M.files:
+    #    print(f, session.HART15M[f].variables)
+    #print(session.Head.value('NumScan'))
+    #print(session.Head.value('NumObs'))
+    #print(session.HART15M.files)
+    #print(len(session['HART15M']['Part-ZenithPathTropWet_kNMF'].value('Part-ZenithPathTropWet')))
 
+    #print(len(session['Observables/TimeUTC'].value('YMDHM')))
+    #print(session['Observables/TimeUTC'].value('YMDHM'))
+
+    #print(session.stations)
+    #print(session.datasets)
+    print(session.baselines)
+    print(session.baselines.memory_usage(deep=True).sum())
