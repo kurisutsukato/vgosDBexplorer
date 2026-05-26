@@ -154,26 +154,18 @@ class VGOSSession:
         
 
     def _scan_archive(self):
-
         with tarfile.open(self.archive_path, "r:gz") as tar:
-
             for member in tar.getmembers():
-
                 if member.isfile() and member.name.endswith(".nc"):
-
                     self._members[member.name] = member
 
-        #
         # determine common root folder
-        #
-
         roots = {
             PurePosixPath(path).parts[0]
             for path in self._members
         }
 
         if len(roots) != 1:
-
             raise RuntimeError(
                 "Archive must contain exactly one top-level folder"
             )
@@ -212,21 +204,32 @@ class VGOSSession:
         return wrapped
 
     def _find_parameters(self):
-
         parameters = {}
         for dsname in self.datasets:
+            if 'TimeUTC' in dsname:
+                continue
             ds = self[dsname]
             for var in ds.variables:
                 tmp = ds.value(var)
-                if not np.isscalar(tmp) and tmp.shape[0] == len(self.baselines):
+                if not np.isscalar(tmp) and tmp.shape[0] == self.numobs:
                     if tmp.ndim > 1:
                         for n in range(tmp.shape[1]):
-                            self.parameters[f'{dsname}/{var}-{n}'] = tmp[:,n]
-                    self.parameters[f'{dsname}/{var}'] = tmp
+                            if tmp.ndim > 2:
+                                for q in range(tmp.shape[2]):
+                                    parameters[f'{dsname}/{var}-{n}_{q}'] = tmp[:,n,q]
+                            else:
+                                parameters[f'{dsname}/{var}-{n}'] = tmp[:, n]
+                    else:
+                        parameters[f'{dsname}/{var}'] = tmp
+        for k,v in parameters.items():
+            if v.ndim != 1:
+                print(k, len(v))
+            if len(v) != self.numobs:
+                print(k, len(v))
+        return parameters
 
     def _find_baselines(self):
         hm = np.asarray(self['Observables/TimeUTC'].value('YMDHM'))
-        
         if hm[:, 0].max() < 2000:
             hm += [2000, 0, 0, 0, 0]
 
@@ -260,7 +263,12 @@ class VGOSSession:
             axis=1
         )
         df["utc"] = pd.to_datetime(df["utc"]).astype("datetime64[us]")
+
+        dfpars = pd.DataFrame(self._find_parameters())
+        print(df.info())
+        print(dfpars.info())
         self.baselines = df
+        print(self.baselines)
 
     def _find_head(self):
 
@@ -350,9 +358,10 @@ if __name__ == '__main__':
     session = VGOSSession("./20210531-r11001.tgz")
 
     #print(len(session['Observables/TimeUTC'].value('YMDHM')))
-    print(len(session['AGGO']['TimeUTC'].value('YMDHM')))
+    #print(len(session['AGGO']['TimeUTC'].value('YMDHM')))
 
     #print(session.stations)
-    df = pd.DataFrame({'utc':session.utc, 'qual':session.parameters['Observables/QualityCode_bX/QualityCode']})
+    #df = pd.DataFrame({'utc':session.utc, 'qual':session.parameters['Observables/QualityCode_bX/QualityCode']})
     #print(session['AGGO'].utc.merge(df, left_on='utc', right_on='utc', how='inner'))
-    print(session['AGGO'].parameters.keys())
+    #print(session['AGGO'].parameters.keys())
+    #print(session.baselines)

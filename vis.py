@@ -5,17 +5,15 @@ from dash import dcc, html, Input, Output
 import pandas as pd
 import plotly.express as px
 import numpy as np
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 from vgosdb import VGOSSession
 
-session = VGOSSession("R11001.tgz")
+session = VGOSSession("20210531-r11001.tgz")
 
 app = dash.Dash(__name__)
 
-
-#
-# helpers
-#
 
 def station_dataset_options(station_name):
     if not station_name:
@@ -343,4 +341,4 @@ def update_session_text(
 
 if __name__ == "__main__":
 
-    app.run(debug=True)
+    app.run(debug=True, port=8888)

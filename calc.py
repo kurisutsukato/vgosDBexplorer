@@ -96,7 +96,7 @@ def radec_to_azel(
     # ENU components
     #
 
-    east = cos_dec * sin_H
+    east = -cos_dec * sin_H
 
     north = (
         sin_dec * cos_lat
