@@ -1,13 +1,20 @@
 import base64
 import tempfile
 from pathlib import Path
+import uuid
+
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 import numpy as np
 
 import dash
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html, Input, Output, State, ctx
+from dash.exceptions import PreventUpdate
+
+import pandas as pd
+
+
 from plotly.subplots import make_subplots
 import plotly.graph_objs as go
 from plotly.validator_cache import ValidatorCache
@@ -17,74 +24,148 @@ syms += SymbolValidator.values[9::12]
 syms += SymbolValidator.values[4::12]
 syms += SymbolValidator.values[7::12]
 
-import pandas as pd
-import logging
-
-logging.basicConfig(level=logging.INFO)
 
 from vgosdb import VGOSSession
 
-current_session = None
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(levelname)s %(filename)s:%(lineno)d %(message)s'
+)
 
 
-def empty():
-    fig = make_subplots(1, 1)
-    fig.update_layout(width=900, height=200,
-                      margin=dict(l=0, r=0, t=0, b=0))
+UPLOAD_DIR = Path("./uploaded_vgosdb")
+UPLOAD_DIR.mkdir(exist_ok=True)
 
-    return fig
+loaded_sessions = {}
+#initial_stored_sessions = {}
+
+for filepath in UPLOAD_DIR.glob("*.tgz"):
+    try:
+        session_id = filepath.stem
+        session = None
+        #session = VGOSSession(filepath)
+
+        loaded_sessions[session_id] = session
+
+    except Exception as ex:
+        print(f"Could not load {filepath}: {ex}")
+
+def scan_sessions():
+    sessions = {}
+
+    for filepath in UPLOAD_DIR.glob("*.tgz"):
+        try:
+            session_id = filepath.stem
+
+            sessions[session_id] = {
+                "filename": filepath.name,
+                "filepath": str(filepath)
+            }
+        except Exception as ex:
+            print(f"Could not load {filepath}: {ex}")
+
+    return sessions
+
+
+def empty(height=900):
+    fig = go.Figure()
+
+    fig.update_layout(
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        plot_bgcolor='white',
+        paper_bgcolor='white',
+        annotations=[
+            dict(
+                text="No data available",
+                x=0.5,
+                y=0.5,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                font=dict(size=20)
+            )
+        ],
+        height=height, width=900
+    )
+    return  fig
 
 app = dash.Dash(__name__)
 
 app.layout = html.Div(
     [
+        dcc.Location(
+            id="url",
+            refresh=False
+        ),
+
+        dcc.Store(
+            id="stored-sessions",
+            data={} #initial_stored_sessions
+        ),
 
         html.H1("vgosDB Explorer"),
         html.Div(
             [
 
-                #
                 # LEFT COLUMN
-                #
-
                 html.Div(
                     [
+                        html.Label("Stored Sessions"),
 
-                        dcc.Upload(
-                            id="upload-vgosdb",
-                            children=html.Div(
-                                [
-                                    "Drag and Drop or ",
-                                    html.A("Select VGOSDB File")
-                                ]
-                            ),
-                            style={
-                                "width": "100%",
-                                "height": "60px",
-                                "lineHeight": "60px",
-                                "borderWidth": "1px",
-                                "borderStyle": "dashed",
-                                "borderRadius": "5px",
-                                "textAlign": "center",
-                                "marginBottom": "20px",
-                            },
-                            multiple=False
+                        dcc.Loading(
+                            id="session-loading",
+                            type="circle",
+                            target_components={
+                                    "info-session-loading": "children"
+                                },
+                            children = [
+                                dcc.Dropdown(
+                                    id="session-dropdown",
+                                    value=None, #next(iter(initial_stored_sessions), None),
+                                    clearable=False
+                                ),
+                            html.Div(id="info-session-loading")
+                            ]
                         ),
 
                         dcc.Loading(
                             id="upload-loading",
                             type="circle",
-                            children=html.Div(
-                                id="upload-status"
-                            )
+                            target_components={
+                                    "info-file-loading": "children"
+                                },
+                            children=[
+                                dcc.Upload(
+                                    id="upload-vgosdb",
+                                    children=html.Div(
+                                        [
+                                            "Drag and Drop or ",
+                                            html.A("Select VGOSDB File")
+                                        ]
+                                    ),
+                                    style={
+                                        "width": "100%",
+                                        "height": "60px",
+                                        "lineHeight": "60px",
+                                        "borderWidth": "1px",
+                                        "borderStyle": "dashed",
+                                        "borderRadius": "5px",
+                                        "textAlign": "center",
+                                        "marginBottom": "20px",
+                                        "marginTop": "10px"
+                                    },
+                                    multiple=False
+                                ),
+                                html.Div(id="info-file-loading")
+                            ]
                         ),
 
-                        html.Hr(),
+                        html.Br(),
 
-                        #
                         # station controls
-                        #
-
                         html.Div(
                             [
 
@@ -121,52 +202,45 @@ app.layout = html.Div(
                             "flexDirection": "row",
                             "justifyContent": "space-between",
                             "gap": "10px",
-                            "marginBottom": "20px"
+                            "marginBottom": "10px",
+                            "marginTop": "10px"
                         }
                         ),
 
                         html.Br(),
 
-                        #
                         # source selection
-                        #
-
                         html.Div(
                             [
-
                                 html.Label("Available Sources"),
 
                                 dcc.Dropdown(
                                     id="source-dropdown",
                                     clearable=True
                                 )
-
                             ]
                         ),
 
                         html.Br(),
 
-                        #
                         # parameter selection
-                        #
-
                         html.Div(
                             [
-
-                                html.Label("Parameters"),
+                                html.Label("Polar plot"),
 
                                 dcc.Dropdown(
                                     id="parameter-dropdown",
                                     clearable=True
                                 )
-
                             ]
                         ),
+
+                        html.Br(),
 
                         html.Div(
                             [
 
-                                html.Label("Parameters 2"),
+                                html.Label("Linear plot"),
 
                                 dcc.Dropdown(
                                     id="parameter2-dropdown",
@@ -176,12 +250,8 @@ app.layout = html.Div(
                             ]
                         ),
 
-                        html.Hr(),
 
-                        #
                         # text output
-                        #
-
                         html.H3("Matching Observations"),
 
                         dcc.Textarea(
@@ -206,22 +276,27 @@ app.layout = html.Div(
                 ),
 
                 # RIGHT COLUMN
-
                 html.Div(
                     [
                         dcc.Graph(
-                            figure=empty(),
+                            figure=empty(500),
                             id="output-figpol",
-                            style={
-                                "height": "65vh"
-                            }
+                            #style={
+                            #    "height": "65vh"
+                            #}
                         ),
                         dcc.Graph(
-                            figure=empty(),
+                            figure=empty(500),
                             id="output-figxy",
                             style={
-                                "height": "30vh"
+                                "margin-top": "40px"
                             }
+                        ),
+                        html.Div('Zooming on the data in the XY plot acts as a filter for the polar plot. Zooming is '
+                                 'possible in both, or individually along just one axis. Click and drag the time units '
+                                 'near the center of the axis to move the time window. Click and drag the time units '
+                                 'near the end of the axis to extend/shrink the window.',
+                                 style=dict(width='800px', margin='20px')
                         )
 
                     ],
@@ -245,64 +320,134 @@ app.layout = html.Div(
     }
 )
 
-@app.callback(
-    Output("upload-status", "children"),
-    Output("station1-dropdown", "options"),
-    Output("station1-dropdown", "value"),
-    Output("station2-dropdown", "options"),
-    Output("station2-dropdown", "value"),
-    Input("upload-vgosdb", "contents"),
-    State("upload-vgosdb", "filename")
-)
-def upload_file(contents, filename):
 
-    global current_session
+@app.callback(
+    Output("stored-sessions", "data", allow_duplicate=True),
+    Output("session-dropdown", "options", allow_duplicate=True),
+    Output("session-dropdown", "value", allow_duplicate=True),
+
+    Input("url", "pathname"),
+    prevent_initial_call=True
+)
+def reload_sessions(_):
+    sessions = scan_sessions()
+
+    # optionally rebuild RAM cache
+    loaded_sessions.clear()
+
+    options = [
+        {
+            "label": item["filename"],
+            "value": sid
+        }
+        for sid, item in sessions.items()
+    ]
+
+    return sessions, options, None
+
+@app.callback(
+    Output("stored-sessions", "data", allow_duplicate=True),
+    Output("session-dropdown", "options", allow_duplicate=True),
+    Output("session-dropdown", "value", allow_duplicate=True),
+    Output("info-file-loading", "children"),
+
+    Input("upload-vgosdb", "contents"),
+
+    State("upload-vgosdb", "filename"),
+    State("stored-sessions", "data"),
+    prevent_initial_call=True
+)
+def upload_file(contents, filename, stored_sessions):
 
     if contents is None:
-
-        return "", [], None, [], None
-
+        raise PreventUpdate
+    logging.info(f'{filename}')
     try:
         content_type, content_string = contents.split(",")
         decoded = base64.b64decode(content_string)
 
-        tmp = tempfile.NamedTemporaryFile(
-            suffix=".tgz",
-            delete=False
-        )
+        session_id = str(uuid.uuid4())
 
-        tmp.write(decoded)
-        tmp.close()
+        filepath = UPLOAD_DIR / filename
 
-        current_session = VGOSSession(tmp.name)
+        with open(filepath, "wb") as f:
+            f.write(decoded)
 
-        stations = current_session.station_names
+        # -------------------------------------------------------------
+        # load session into memory cache
+        # -------------------------------------------------------------
+
+        session = VGOSSession(filepath)
+
+        loaded_sessions[session_id] = session
+
+        # -------------------------------------------------------------
+        # persistent metadata
+        # -------------------------------------------------------------
+
+        stored_sessions[session_id] = {
+            "filename": filename,
+            "filepath": str(filepath)
+        }
 
         options = [
             {
-                "label": s,
-                "value": s
+                "label": item["filename"],
+                "value": sid
             }
-            for s in stations
+            for sid, item in stored_sessions.items()
         ]
 
-        return (
-            f"Loaded: {filename}",
-            options,
-            None, #stations[0] if stations else None,
-            options,
-            None, #stations[1] if len(stations) > 1 else None
-        )
+        return stored_sessions, options, session_id, html.Div(className="flash-message", children=f"Loaded {filename}")
 
     except Exception as ex:
+        return stored_sessions, dash.no_update, dash.no_update, ""
 
-        return (
-            f"Error: {ex}",
-            [],
-            None,
-            [],
-            None
-        )
+
+@app.callback(
+    Output("station1-dropdown", "options"),
+    Output("station1-dropdown", "value"),
+    Output("station2-dropdown", "options"),
+    Output("station2-dropdown", "value"),
+    Output("info-session-loading", "children"),
+    Input("session-dropdown", "value"),
+    State("station1-dropdown", "value"),
+    State("station2-dropdown", "value"),
+    State("stored-sessions", "data")
+)
+def select_session(session_id, st1_current, st2_current, stored_sessions):
+    if not session_id:
+        raise PreventUpdate
+    logging.info(f'{session_id}')
+    # -------------------------------------------------------------------------
+    # ensure session exists in RAM cache
+    # (important after server restart)
+    # -------------------------------------------------------------------------
+
+    if session_id not in loaded_sessions:
+        info = stored_sessions[session_id]
+
+        loaded_sessions[session_id] = VGOSSession(info["filepath"])
+
+    session = loaded_sessions[session_id]
+
+    station_options = [
+        {
+            "label": s,
+            "value": s
+        }
+        for s in session.station_names
+    ]
+
+    logging.info(f'{st1_current} {session.station_names}')
+
+    return  (
+        station_options,
+        st1_current if st1_current in session.station_names else None,
+        station_options,
+        st2_current if st2_current in session.station_names else None,
+        ""
+    )
 
 @app.callback(
     Output("parameter2-dropdown", "options"),
@@ -310,10 +455,13 @@ def upload_file(contents, filename):
     Input("station1-dropdown", "value"),
     Input("station2-dropdown", "value"),
     Input("source-dropdown", "value"),
-    State("parameter2-dropdown", "value")
+    State("parameter2-dropdown", "value"),
+    State("session-dropdown", "value"),
 )
-def update_parameters2(st1, st2, source, current_parameter):
-    global current_session
+def update_parameters2(st1, st2, source, current_parameter, session_id):
+    if not session_id:
+        return {}, None
+    current_session = loaded_sessions[session_id]
 
     if current_session is None:
         return {}, None
@@ -336,10 +484,14 @@ def update_parameters2(st1, st2, source, current_parameter):
     Input("station1-dropdown", "value"),
     Input("station2-dropdown", "value"),
     Input("source-dropdown", "value"),
-    State("parameter-dropdown", "value")
+    State("parameter-dropdown", "value"),
+    State("session-dropdown", "value"),
+
 )
-def update_parameters(st1, st2, source, current_parameter):
-    global current_session
+def update_parameters(st1, st2, source, current_parameter, session_id):
+    if not session_id:
+        return [], None
+    current_session = loaded_sessions[session_id]
 
     if current_session is None:
         return [], None
@@ -361,11 +513,14 @@ def update_parameters(st1, st2, source, current_parameter):
     Output("source-dropdown", "value"),
     Input("station1-dropdown", "value"),
     Input("station2-dropdown", "value"),
-    State("source-dropdown", "value")
-)
-def update_sources(st1, st2, current_source):
+    State("source-dropdown", "value"),
+    State("session-dropdown", "value"),
 
-    global current_session
+)
+def update_sources(st1, st2, current_source, session_id):
+    if not session_id:
+        return [], None
+    current_session = loaded_sessions[session_id]
 
     if current_session is None:
         return [], None
@@ -396,8 +551,7 @@ def update_sources(st1, st2, current_source):
         return options, None
 
 
-def parameter_list(st1, st2, source, parameter, parameter2=None):
-    global current_session
+def parameter_list(current_session, st1, st2, source, parameter, parameter2=None):
     df = current_session.baselines
 
     mask = pd.Series(True, index=df.index)
@@ -411,13 +565,10 @@ def parameter_list(st1, st2, source, parameter, parameter2=None):
 
     sub = df.loc[mask]
 
-    logging.info(f'len sub: {len(sub)}')
-
     cols = []
 
     if parameter is not None:
         name = parameter.split('/')[-1]
-        logging.info('parameter1')
         if '|' in parameter:  # station parameters
             par = current_session[st1].parameters[parameter]
             df = current_session[st1].utc.copy()
@@ -426,32 +577,32 @@ def parameter_list(st1, st2, source, parameter, parameter2=None):
             par = current_session.parameters[parameter]
             df = current_session.baselines.copy()
             df[name] = par
-            df = df.loc[df['baseline'] == '-'.join(sorted([st1, st2]))]
+            if st2:
+                df = df.loc[df['baseline'] == '-'.join(sorted([st1, st2]))].copy()
+            else:
+                df = df.loc[(df.st1 == st1) | (df.st2 == st1)].copy()
         cols.append(name)
 
-        logging.info(f'len df: {len(df)} {df.columns}')
-
         #sub = sub.merge(df, on='utc', how='left')
-        sub = sub.merge(df, on='utc', how='left')
-        logging.info(f'len sub: {len(sub)} {sub.columns}')
+        sub = sub.merge(df[[name, 'utc']], on='utc', how='left')
 
-        if parameter2 is not None:
-            logging.info('parameter2')
+        if parameter2 is not None and parameter2 != parameter:
+            name = parameter2.split('/')[-1]
             if '|' in parameter2:  # station parameters
                 par = current_session[st1].parameters[parameter2]
                 df = current_session[st1].utc.copy()
+                df[name] = par
             else: # session parameters
                 par = current_session.parameters[parameter2]
-                df = current_session.baselines[['utc']].copy()
-
-            name = parameter2.split('/')[-1]
-            df[name] = par
+                df = current_session.baselines.copy()
+                df[name] = par
+                if st2:
+                    df = df.loc[df['baseline'] == '-'.join(sorted([st1, st2]))].copy()
+                else:
+                    df = df.loc[(df.st1 == st1) | (df.st2 == st1)].copy()
             cols.append(name)
 
-            logging.info(f'len df: {len(df)} {df.columns}')
-
-            sub = df.merge(sub, on='utc', how='left')
-            logging.info(f'len sub: {len(sub)} {sub.columns}')
+            sub = sub.merge(df[[name, 'utc']], on='utc', how='left')
 
     return sub, cols
 
@@ -461,10 +612,14 @@ def parameter_list(st1, st2, source, parameter, parameter2=None):
     Input("station1-dropdown", "value"),
     Input("station2-dropdown", "value"),
     Input("source-dropdown", "value"),
-    Input("parameter-dropdown", "value")
+    Input("parameter-dropdown", "value"),
+    Input("parameter2-dropdown", "value"),
+    State("session-dropdown", "value"),
 )
-def update_output(st1, st2, source, parameter):
-    global current_session
+def update_output(st1, st2, source, parameter, parameter2, session_id):
+    if not session_id:
+        return ""
+    current_session = loaded_sessions[session_id]
 
     if current_session is None:
         return ""
@@ -472,7 +627,7 @@ def update_output(st1, st2, source, parameter):
     if st1 is None and st2 is None:
         return ""
 
-    sub, parcols = parameter_list(st1, st2, source, parameter)
+    sub, parcols = parameter_list(current_session, st1, st2, source, parameter, parameter2)
 
     cols = ["utc"] + parcols + ["src", "st1", "st2", "st1az", "st1el", "st2az", "st2el"]
 
@@ -481,7 +636,6 @@ def update_output(st1, st2, source, parameter):
     )
 
 def select_station_column(df, station, quantity):
-
     mask = df["st1"] == station
 
     return np.where(
@@ -495,28 +649,23 @@ def select_station_column(df, station, quantity):
     Input("station1-dropdown", "value"),
     Input("station2-dropdown", "value"),
     Input("source-dropdown", "value"),
+    Input("parameter-dropdown", "value"),
     Input("parameter2-dropdown", "value"),
+    State("session-dropdown", "value"),
 )
-def update_plotxy(
-    st1,
-    st2,
-    source,
-    parameter2,
-):
-    global current_session
+def update_plotxy(st1, st2, source, parameter, parameter2, session_id):
+    if not session_id:
+        return empty(200)
 
-    if current_session is None:
-        return empty()
+    current_session = loaded_sessions[session_id]
 
-    if parameter2 is None:
-        return empty()
+    if current_session is None or parameter2 is None:
+        return empty(200)
 
-    filtered, names = parameter_list(st1, st2, source, parameter2)
-    logging.info(f'plotxy {len(filtered)} {names}   ')
-
+    filtered, names = parameter_list(current_session, st1, st2, source, parameter2)
 
     fig = make_subplots(1, 1)
-    fig.update_layout(width=1000, height=200, margin=dict(l=0, r=0, t=0, b=0))
+    fig.update_layout(width=1000, height=200, margin=dict(l=0, r=0, t=40, b=0))
 
     fig.add_trace(go.Scatter(x=filtered.utc, y=filtered[names[0]], mode='markers'), row=1, col=1)
     return fig
@@ -529,27 +678,24 @@ def update_plotxy(
     Input("parameter-dropdown", "value"),
     Input("output-figxy", "relayoutData"),
     State("parameter2-dropdown", "value"),
+    State("session-dropdown", "value"),
 )
-def update_plotpol(
-    st1,
-    st2,
-    source,
-    parameter,
-    relayout,
-    parameter2
-):
-    global current_session
+def update_plotpol(st1, st2, source, parameter, relayout, parameter2, session_id):
+    if not session_id:
+        return empty(550)
+    current_session = loaded_sessions[session_id]
 
-    if current_session is None:
-        return empty()
+    if current_session is None or parameter is None:
+        return empty(550)
 
-    if parameter is None:
-        return empty()
+    filtered, names = parameter_list(current_session, st1, st2, source, parameter, parameter2)
 
-    filtered, names = parameter_list(st1, st2, source, parameter, parameter2)
-    logging.info(f'plotpol {len(filtered)} {names}   ')
+    mi = filtered[names[0]].min()
+    ma = filtered[names[0]].max()
 
-    if relayout:
+    logging.info(f'{ctx.triggered_id} {relayout}')
+
+    if ctx.triggered_id == 'output-figxy' and relayout:
         if "xaxis.range[0]" in relayout:
             xmin = pd.to_datetime(relayout["xaxis.range[0]"])
             xmax = pd.to_datetime(relayout["xaxis.range[1]"])
@@ -561,8 +707,6 @@ def update_plotpol(
             name = parameter2.split('/')[-1]
             filtered = filtered.loc[(filtered[name] >= ymin) & (filtered[name] <= ymax)]
 
-    mi = filtered[names[0]].min()
-    ma = filtered[names[0]].max()
 
     kwargs = dict(marker_colorbar_thickness=24, marker_cmax=mi, marker_cmin=ma,
                   mode='markers',
@@ -596,8 +740,6 @@ def update_plotpol(
             ),row=1, col=1)
     else:
         for n,(bl, df_bl) in enumerate(filtered.groupby('baseline')):
-            st = 'st1' if st1 in df_bl['st1'].values else 'st2'
-
             kwargs['marker']['symbol'] = syms[n]
 
             df_bl["staz"] = select_station_column(df_bl, st1, 'az')
@@ -623,8 +765,6 @@ def update_plotpol(
             cmax=ma,
             colorbar=dict(
                 title=names[0],
-                y=0.65,  # center
-                len=0.7,  # height
                 yanchor="middle"
             )
         )

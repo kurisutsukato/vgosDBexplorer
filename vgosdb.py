@@ -212,8 +212,7 @@ class VGOSSession:
         return wrapped
 
     def _find_parameters(self):
-
-        parameters = {}
+        self.parameters = {}
         for dsname in self.datasets:
             ds = self[dsname]
             for var in ds.variables:
@@ -350,9 +349,10 @@ if __name__ == '__main__':
     session = VGOSSession("./20210531-r11001.tgz")
 
     #print(len(session['Observables/TimeUTC'].value('YMDHM')))
-    print(len(session['AGGO']['TimeUTC'].value('YMDHM')))
+    #print(len(session['AGGO']['TimeUTC'].value('YMDHM')))
 
     #print(session.stations)
-    df = pd.DataFrame({'utc':session.utc, 'qual':session.parameters['Observables/QualityCode_bX/QualityCode']})
+    #df = pd.DataFrame({'utc':session.utc, 'qual':session.parameters['Observables/QualityCode_bX/QualityCode']})
     #print(session['AGGO'].utc.merge(df, left_on='utc', right_on='utc', how='inner'))
-    print(session['AGGO'].parameters.keys())
+    #print(session['AGGO'].parameters.keys())
+    print(session.baselines)
