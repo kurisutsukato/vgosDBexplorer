@@ -209,20 +209,6 @@ app.layout = html.Div(
 
                         html.Br(),
 
-                        # source selection
-                        html.Div(
-                            [
-                                html.Label("Available Sources"),
-
-                                dcc.Dropdown(
-                                    id="source-dropdown",
-                                    clearable=True
-                                )
-                            ]
-                        ),
-
-                        html.Br(),
-
                         # parameter selection
                         html.Div(
                             [
@@ -250,6 +236,21 @@ app.layout = html.Div(
                             ]
                         ),
 
+                        html.Br(),
+
+                        # source selection
+                        html.Div(
+                            [
+                                html.Label("Source filter"),
+
+                                dcc.Dropdown(
+                                    id="source-dropdown",
+                                    clearable=True
+                                )
+                            ]
+                        ),
+
+                        html.Br(),
 
                         # text output
                         html.H3("Matching Observations"),
