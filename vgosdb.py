@@ -11,7 +11,7 @@ import xarray as xr
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-from calc import radec_to_azel
+from misc import radec_to_azel
 
 class VGOSFile:
 
@@ -101,7 +101,11 @@ class VGOSStation:
                 if not np.isscalar(tmp) and tmp.shape[0] == len(self.utc):
                     if tmp.ndim > 1:
                         for n in range(tmp.shape[1]):
-                            parameters[f'STATION|{dsname}/{var}-{n}'] = tmp[:,n]
+                            if tmp.ndim > 2:
+                                for q in range(tmp.shape[2]):
+                                    parameters[f'STATION|{dsname}/{var}-{n}_{q}'] = tmp[:, n, q]
+                            else:
+                                parameters[f'STATION|{dsname}/{var}-{n}'] = tmp[:,n]
                     else:
                         parameters[f'STATION|{dsname}/{var}'] = tmp
         return parameters
@@ -220,8 +224,13 @@ class VGOSSession:
                 if not np.isscalar(tmp) and tmp.shape[0] == len(self.baselines):
                     if tmp.ndim > 1:
                         for n in range(tmp.shape[1]):
-                            self.parameters[f'{dsname}/{var}-{n}'] = tmp[:,n]
-                    self.parameters[f'{dsname}/{var}'] = tmp
+                            if tmp.ndim > 2:
+                                for q in range(tmp.shape[2]):
+                                    self.parameters[f'{dsname}/{var}-{n}_{q}'] = tmp[:,n,q]
+                            else:
+                                self.parameters[f'{dsname}/{var}-{n}'] = tmp[:,n]
+                    else:
+                        self.parameters[f'{dsname}/{var}'] = tmp
 
     def _find_baselines(self):
         hm = np.asarray(self['Observables/TimeUTC'].value('YMDHM'))
