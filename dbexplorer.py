@@ -202,10 +202,6 @@ app.layout = html.Div(
 )
 
 
-#
-# station dataset callback
-#
-
 @app.callback(
     Output("station-dataset-dropdown", "options"),
     Output("station-dataset-dropdown", "value"),
@@ -223,11 +219,6 @@ def update_station_datasets(station_name):
         value = options[0]["value"]
 
     return options, value
-
-
-#
-# station variable callback
-#
 
 @app.callback(
     Output("station-variable-dropdown", "options"),
@@ -251,11 +242,6 @@ def update_station_variables(
         value = options[0]["value"]
 
     return options, value
-
-
-#
-# station display callback
-#
 
 @app.callback(
     Output("station-text", "value"),
@@ -283,11 +269,6 @@ def update_station_text(
 
     return format_value(values)
 
-
-#
-# session variable callback
-#
-
 @app.callback(
     Output("session-variable-dropdown", "options"),
     Output("session-variable-dropdown", "value"),
@@ -305,11 +286,6 @@ def update_session_variables(dataset_name):
         value = options[0]["value"]
 
     return options, value
-
-
-#
-# session display callback
-#
 
 @app.callback(
     Output("session-text", "value"),
@@ -334,11 +310,5 @@ def update_session_text(
 
     return format_value(values)
 
-
-#
-# main
-#
-
 if __name__ == "__main__":
-
-    app.run(debug=True, port=8888)
+    app.run(debug=True, host='0.0.0.0', port=9002)

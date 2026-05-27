@@ -14,11 +14,11 @@ Both tools are webapps based on the Python Dash framework and therefore run insi
   
 Start the web applications with:
  
-    python dbexplorer.py
+    python dbexplorer.py (and point the webbrowser to http://127.0.0.1:9002)
 
 or
 
-    python visexplorer.py
+    python visexplorer.py (and point the webbrowser to http://127.0.0.1:9003)
 
 The purpose of `visexplorer.py` is to visualize observation data as a function of a station’s azimuth and elevation angles.
 First, upload a vgosDB to the server, where it will be stored for future use, or select one of the vgosDB files already available on the server.
