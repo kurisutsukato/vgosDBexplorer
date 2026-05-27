@@ -155,7 +155,7 @@ layout = html.Div(
 
                         html.Div(
                             [
-                                html.Label("Linear plot"),
+                                html.Label("Time-series plot"),
                                 dcc.Dropdown(
                                     id="parameter2-dropdown",
                                     clearable=True
@@ -220,7 +220,7 @@ layout = html.Div(
                                 "margin-top": "40px"
                             }
                         ),
-                        html.Div('Zooming on the data in the XY plot acts as a filter for the polar plot. Zooming is '
+                        html.Div('Zooming on the data in the time-series plot acts as a filter for the polar plot. Zooming is '
                                  'possible in both, or individually along just one axis. Click and drag the time units '
                                  'near the center of the axis to move the time window. Click and drag the time units '
                                  'near the end of the axis to extend/shrink the window.',
