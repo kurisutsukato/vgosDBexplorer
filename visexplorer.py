@@ -2,19 +2,19 @@ import base64
 import tempfile
 from pathlib import Path
 import uuid
+import os
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 import numpy as np
-
 import dash
 from dash import dcc, html, Input, Output, State, ctx
 from dash.exceptions import PreventUpdate
 
 import pandas as pd
 import logging
-
+import dotenv
 
 from plotly.subplots import make_subplots
 import plotly.graph_objs as go
@@ -31,7 +31,7 @@ from applayout import layout, empty
 from misc import filter
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG if os.environ.get('DEBUG', False) else logging.INFO,
     format='%(levelname)s %(filename)s:%(lineno)d %(message)s'
 )
 
@@ -327,7 +327,7 @@ def update_plotxy(st1, st2, source, parameter, parameter2, session_id):
     Input("source-dropdown", "value"),
     Input("parameter-dropdown", "value"),
     Input("output-figxy", "relayoutData"),
-    State("parameter2-dropdown", "value"),
+    Input("parameter2-dropdown", "value"),
     State("session-dropdown", "value"),
 )
 def update_plotpol(st1, st2, source, parameter, relayout, parameter2, session_id):
@@ -343,7 +343,7 @@ def update_plotpol(st1, st2, source, parameter, relayout, parameter2, session_id
     mi = filtered[names[0]].min()
     ma = filtered[names[0]].max()
 
-    logging.debug(f'{ctx.triggered_id} {relayout}')
+    logging.debug(f'trigger: {ctx.triggered_id}, relayout: {relayout}')
 
     if ctx.triggered_id == 'output-figxy' and relayout:
         if "xaxis.range[0]" in relayout:
