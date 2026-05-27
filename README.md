@@ -22,9 +22,11 @@ or
 
 The purpose of `visexplorer.py` is to visualize observation data as a function of a station’s azimuth and elevation angles.
 First, upload a vgosDB to the server, where it will be stored for future use, or select one of the vgosDB files already available on the server.
+
 At minimum, you must select:
 - a station and
 - one of the session or station parameters for either the polar or the time-series plot.
+- 
 You can further filter the displayed data by selecting a specific baseline and/or source using the corresponding controls. 
 
 When you zoom into the time-series plot, the polar plot is updated automatically to display only the observations that fall within the selected time range and/or y-range.
