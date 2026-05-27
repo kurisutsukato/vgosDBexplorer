@@ -12,7 +12,7 @@ Both tools are webapps based on the Python Dash framework and therefore run insi
     . venv/bin/activate    (on windows with powershell use .venv/scripts/activate.ps1)
     pip install -r requirements.txt
   
-And run the webapps with:
+Start the web applications with:
  
     python dbexplorer.py
 
