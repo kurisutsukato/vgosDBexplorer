@@ -24,7 +24,7 @@ def empty(height=900):
     )
     return  fig
 
-layout = html.Div(
+visexplorer = html.Div(
     [
         dcc.Location(
             id="url",
@@ -245,5 +245,167 @@ layout = html.Div(
     ],
     style={
         "margin": "10px"
+    }
+)
+
+dbexplorer = html.Div(
+    [
+        dcc.Location(
+            id="url",
+            refresh=False
+        ),
+
+        dcc.Store(
+            id="stored-sessions",
+            data={} #initial_stored_sessions
+        ),
+        html.H1("VGOS Session Viewer"),
+
+        html.Label("Stored Sessions"),
+
+        dcc.Loading(
+            id="session-loading",
+            type="circle",
+            target_components={"info-session-loading": "children"},
+            children=[
+                dcc.Dropdown(
+                    id="session-dropdown",
+                    value=None,  # next(iter(initial_stored_sessions), None),
+                    clearable=False
+                ),
+                html.Div(id="info-session-loading")
+            ]
+        ),
+
+        dcc.Loading(
+            id="upload-loading",
+            type="circle",
+            target_components={"info-file-loading": "children"},
+            children=[
+                dcc.Upload(
+                    id="upload-vgosdb",
+                    children=html.Div(
+                        [
+                            "Drag and Drop or ",
+                            html.A("Select VGOSDB File")
+                        ]
+                    ),
+                    style={
+                        "width": "100%",
+                        "height": "60px",
+                        "lineHeight": "60px",
+                        "borderWidth": "1px",
+                        "borderStyle": "dashed",
+                        "borderRadius": "5px",
+                        "textAlign": "center",
+                        "marginBottom": "20px",
+                        "marginTop": "10px"
+                    },
+                    multiple=False
+                ),
+                html.Div(id="info-file-loading")
+            ]
+        ),
+
+        #
+        # session section
+        #
+
+        html.H2("Session Variables"),
+
+        html.Label("Dataset"),
+
+        dcc.Dropdown(
+            id="session-dataset-dropdown",
+            options=[],
+            value=None,
+            clearable=False,
+            style={"width": "400px"}
+        ),
+
+        html.Br(),
+
+        #
+        # session variable
+        #
+
+        html.Label("Variable"),
+
+        dcc.Dropdown(
+            id="session-variable-dropdown",
+            clearable=False,
+            style={"width": "400px"}
+        ),
+
+        html.Br(),
+
+        dcc.Textarea(
+            id="session-text",
+            style={
+                "width": "100%",
+                "height": "300px",
+                "fontFamily": "monospace"
+            }
+        ),
+
+
+        html.H2("Station Variables"),
+
+        #
+        # station
+        #
+
+        html.Label("Station"),
+
+        dcc.Dropdown(
+            id="station-dropdown",
+            options=[],
+            value=None,
+            clearable=False,
+            style={"width": "400px"}
+        ),
+
+        html.Br(),
+
+        #
+        # dataset
+        #
+
+        html.Label("Dataset"),
+
+        dcc.Dropdown(
+            id="station-dataset-dropdown",
+            clearable=False,
+            style={"width": "400px"}
+        ),
+
+        html.Br(),
+
+        #
+        # variable
+        #
+
+        html.Label("Variable"),
+
+        dcc.Dropdown(
+            id="station-variable-dropdown",
+            clearable=False,
+            style={"width": "400px"}
+        ),
+
+        html.Br(),
+
+        dcc.Textarea(
+            id="station-text",
+            style={
+                "width": "100%",
+                "height": "300px",
+                "fontFamily": "monospace"
+            }
+        ),
+
+    ],
+    style={
+        "margin": "30px"
     }
 )

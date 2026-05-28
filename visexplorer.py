@@ -27,7 +27,8 @@ syms += SymbolValidator.values[7::12]
 
 
 from vgosdb import VGOSSession
-from applayout import layout, empty
+from applayout import visexplorer as layout
+from applayout import empty
 from misc import filter
 
 logging.basicConfig(
@@ -67,10 +68,9 @@ def scan_sessions():
     return sessions
 
 
-
 app = dash.Dash(__name__)
 app.layout = layout
-
+app.title = 'vgosDB visual explorer'
 
 @app.callback(
     Output("stored-sessions", "data", allow_duplicate=True),

@@ -31,6 +31,8 @@ You can further filter the displayed data by selecting a specific baseline and/o
 
 When you zoom into the time-series plot, the polar plot is updated automatically to display only the observations that fall within the selected time range and/or y-range.
 
+Those data-sets in the vgosDB archive which have more than one dimensions will be interpreted as several one-dimensional parameters. A numeric suffix will be added to the parameter name. E.g.      
+
 `dbexplorer.py` is useful for browsing the structure of a vgosDB file and inspecting the contents of the NetCDF files contained within it.
 
  
