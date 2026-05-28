@@ -9,7 +9,7 @@ vgosDBexplorer contains two tools to explore the data inside a vgosDB archive.
 Both tools are webapps based on the Python Dash framework and therefore run inside a web browser. The required packages can be installed via pip, e.g.
 
     python -m venv .venv
-    . venv/bin/activate    (on windows with powershell use .venv/scripts/activate.ps1)
+    . .venv/bin/activate    (on windows with powershell use .venv/scripts/activate.ps1)
     pip install -r requirements.txt
   
 Start the web applications with:
