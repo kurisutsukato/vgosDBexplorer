@@ -365,3 +365,5 @@ if __name__ == '__main__':
     #print(session['AGGO'].utc.merge(df, left_on='utc', right_on='utc', how='inner'))
     #print(session['AGGO'].parameters.keys())
     print(session.baselines)
+
+    print(session.parameters.keys())
