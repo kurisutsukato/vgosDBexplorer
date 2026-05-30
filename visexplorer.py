@@ -11,6 +11,7 @@ import numpy as np
 import dash
 from dash import dcc, html, Input, Output, State, ctx
 from dash.exceptions import PreventUpdate
+import dash_bootstrap_components as dbc
 
 import pandas as pd
 import logging
@@ -67,8 +68,10 @@ def scan_sessions():
 
     return sessions
 
+app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP,
+                                      "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css",
+                                      ])
 
-app = dash.Dash(__name__)
 app.layout = layout
 app.title = 'vgosDB visual explorer'
 
@@ -166,6 +169,18 @@ def select_session(session_id, st1_current, st2_current, stored_sessions):
         st2_current if st2_current in session.station_names else None,
         ""
     )
+
+@app.callback(
+    Output("station1-dropdown", "value", allow_duplicate=True),
+    Output("station2-dropdown", "value", allow_duplicate=True),
+    Input("switch", "n_clicks"),
+    State("station1-dropdown", "value"),
+    State("station2-dropdown", "value"),
+    prevent_initial_call=True
+)
+def switch(n_clicks, st1, st2):
+    return st2, st1
+
 
 @app.callback(
     Output("parameter2-dropdown", "options"),

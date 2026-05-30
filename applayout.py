@@ -1,4 +1,5 @@
-from dash import dcc, html, Input, Output, State, ctx
+from dash import dcc, html
+import dash_bootstrap_components as dbc
 from plotly import graph_objs as go
 
 def empty(height=900):
@@ -48,9 +49,7 @@ visexplorer = html.Div(
                         dcc.Loading(
                             id="session-loading",
                             type="circle",
-                            target_components={
-                                    "info-session-loading": "children"
-                                },
+                            target_components={"info-session-loading": "children"},
                             children = [
                                 dcc.Dropdown(
                                     id="session-dropdown",
@@ -64,9 +63,7 @@ visexplorer = html.Div(
                         dcc.Loading(
                             id="upload-loading",
                             type="circle",
-                            target_components={
-                                    "info-file-loading": "children"
-                                },
+                            target_components={"info-file-loading": "children"},
                             children=[
                                 dcc.Upload(
                                     id="upload-vgosdb",
@@ -109,8 +106,17 @@ visexplorer = html.Div(
                                         )
                                     ],
                                     style={
-                                        "width": "48%"
+                                        "width": "40%"
                                     }
+                                ),
+
+                                dbc.Button(
+                                    html.I(className="bi bi-arrow-left-right"),
+                                    className="align-self-center",
+                                    outline=True,
+                                    color="secondary",
+                                    id="switch",
+                                    style={'width':"10%"}
                                 ),
 
                                 html.Div(
@@ -123,7 +129,7 @@ visexplorer = html.Div(
                                         )
                                     ],
                                     style={
-                                        "width": "48%"
+                                        "width": "40%"
                                     }
                                 ),
                             ],

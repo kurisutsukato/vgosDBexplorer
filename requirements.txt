@@ -3,5 +3,6 @@ pandas
 numpy
 scipy
 dash
+dash-bootstrap-components
 plotly
 dotenv
