@@ -1,6 +1,9 @@
 vgosDBexplorer
 --------------
 
+*UPDATE (26/6/2026)*: The app is quite slow when exploring VGOS (rather than S/X) experiments. I will
+try to optimize the code ...
+
 vgosDBexplorer contains two tools to explore the data inside a vgosDB archive. 
 
 - dbexplorer: shows the raw content of all the netcdf files whithin a vgosDB archive
