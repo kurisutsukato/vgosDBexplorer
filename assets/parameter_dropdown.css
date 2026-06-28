@@ -1,0 +1,27 @@
+.parameter-search input,
+.parameter-search {
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+}
+
+.parameter-dropdown .Select-control {
+    border-top: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+}
+
+.parameter-dropdown {
+    margin-top: -1px;
+}
+
+/* remove double border */
+.parameter-search:focus,
+.parameter-search:focus-within {
+    z-index: 1000;
+}
+
+/* optional */
+.parameter-dropdown .Select-menu-outer {
+    border-top: none;
+}
+
