@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+from time import perf_counter
+
 
 TWOPI = 2 * np.pi
 
@@ -120,6 +122,7 @@ def radec_to_azel(
 
 
 def filter(current_session, st1, st2, source, parameter=None, parameter2=None):
+    t0 = perf_counter()
     df = current_session.baselines
 
     mask = pd.Series(True, index=df.index)
@@ -170,5 +173,6 @@ def filter(current_session, st1, st2, source, parameter=None, parameter2=None):
             cols.append(name)
 
             sub = sub.merge(df[[name, 'utc']], on='utc', how='left')
+    print(f"filter took {perf_counter() - t0:.3f}s")
 
     return sub, cols

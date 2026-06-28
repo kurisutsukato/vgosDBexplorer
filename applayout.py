@@ -37,6 +37,8 @@ visexplorer = html.Div(
             data={} #initial_stored_sessions
         ),
 
+        dcc.Store(id='last-range'),
+
         html.H1("vgosDB Explorer"),
         html.Div(
             [
@@ -90,6 +92,8 @@ visexplorer = html.Div(
                             ]
                         ),
 
+                        html.Label("When exploring a VGOS session, better select a baseline rather than only one station "
+                                   "in order to reduce the number of points to be displayed."),
                         html.Br(),
 
                         # station controls
@@ -146,13 +150,32 @@ visexplorer = html.Div(
                         html.Br(),
 
                         # parameter selection
+
                         html.Div(
                             [
                                 html.Label("Polar plot"),
 
+                                #dbc.Input(
+                                #    id="parameter-search",
+                                #    placeholder="Select parameter...",
+                                #    autocomplete="off",
+                                #    className="parameter-search",
+                                #),
+
+                                #dcc.Dropdown(
+                                #    id="parameter-dropdown",
+                                #    searchable=False,
+                                #    clearable=True,
+                                #    className="parameter-dropdown",
+                                #    optionHeight=35,
+                                #    maxHeight=300,
+                                #),
+
                                 dcc.Dropdown(
                                     id="parameter-dropdown",
-                                    clearable=True
+                                    clearable=True,
+                                    optionHeight=35,
+                                    maxHeight=300,
                                 )
                             ]
                         ),
@@ -164,7 +187,9 @@ visexplorer = html.Div(
                                 html.Label("Time-series plot"),
                                 dcc.Dropdown(
                                     id="parameter2-dropdown",
-                                    clearable=True
+                                    clearable=True,
+                                    optionHeight=35,
+                                    maxHeight=300,
                                 )
                             ]
                         ),

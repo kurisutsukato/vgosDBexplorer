@@ -3,13 +3,14 @@ import tempfile
 from pathlib import Path
 import uuid
 import os
+from time import perf_counter
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
 import numpy as np
 import dash
-from dash import dcc, html, Input, Output, State, ctx
+from dash import dcc, html, Input, Output, State, ctx, no_update
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 
@@ -121,6 +122,7 @@ def upload_file(contents, filename, stored_sessions):
             f.write(decoded)
 
         session = VGOSSession(filepath)
+
         loaded_sessions[session_id] = session
 
         stored_sessions[session_id] = {
@@ -181,7 +183,6 @@ def select_session(session_id, st1_current, st2_current, stored_sessions):
 def switch(n_clicks, st1, st2):
     return st2, st1
 
-
 @app.callback(
     Output("parameter2-dropdown", "options"),
     Output("parameter2-dropdown", "value"),
@@ -190,6 +191,7 @@ def switch(n_clicks, st1, st2):
     Input("source-dropdown", "value"),
     State("parameter2-dropdown", "value"),
     State("session-dropdown", "value"),
+    prevent_initial_call=True
 )
 def update_parameters2(st1, st2, source, current_parameter, session_id):
     if not session_id:
@@ -248,7 +250,6 @@ def update_parameters(st1, st2, source, current_parameter, session_id):
     Input("station2-dropdown", "value"),
     State("source-dropdown", "value"),
     State("session-dropdown", "value"),
-
 )
 def update_sources(st1, st2, current_source, session_id):
     if not session_id:
@@ -337,6 +338,7 @@ def update_plotxy(st1, st2, source, parameter, parameter2, session_id):
 
 @app.callback(
     Output("output-figpol", "figure"),
+    Output("last-range", "data"),
     Input("station1-dropdown", "value"),
     Input("station2-dropdown", "value"),
     Input("source-dropdown", "value"),
@@ -344,34 +346,55 @@ def update_plotxy(st1, st2, source, parameter, parameter2, session_id):
     Input("output-figxy", "relayoutData"),
     Input("parameter2-dropdown", "value"),
     State("session-dropdown", "value"),
+    State("last-range", "data"),
 )
-def update_plotpol(st1, st2, source, parameter, relayout, parameter2, session_id):
+def update_plotpol(st1, st2, source, parameter, relayout, parameter2, session_id, last_range):
     if not session_id:
-        return empty(550)
+        return empty(550), no_update
     current_session = loaded_sessions[session_id]
 
     if current_session is None or parameter is None:
-        return empty(550)
+        return empty(550), no_update
+
+    if last_range is None:
+        last_range = dict()
 
     filtered, names = filter(current_session, st1, st2, source, parameter, parameter2)
-
-    mi = filtered[names[0]].min()
-    ma = filtered[names[0]].max()
 
     logging.debug(f'trigger: {ctx.triggered_id}, relayout: {relayout}')
 
     if ctx.triggered_id == 'output-figxy' and relayout:
-        if "xaxis.range[0]" in relayout:
+        if "xaxis.autorange" in relayout:
+            last_range.pop('xmin', None)
+            last_range.pop('xmax', None)
+        elif "xaxis.range[0]" in relayout:
             xmin = pd.to_datetime(relayout["xaxis.range[0]"])
             xmax = pd.to_datetime(relayout["xaxis.range[1]"])
-
+            last_range["xmin"] = xmin
+            last_range["xmax"] = xmax
             filtered = filtered.loc[(filtered["utc"] >= xmin) & (filtered["utc"] <= xmax)]
-        if "yaxis.range[0]" in relayout:
+        elif 'xmin' in last_range and 'xmax' in last_range:
+            xmin = last_range['xmin']
+            xmax = last_range['xmax']
+            filtered = filtered.loc[(filtered["utc"] >= xmin) & (filtered["utc"] <= xmax)]
+
+        name = parameter2.split('/')[-1]
+        if "yaxis.autorange" in relayout:
+            last_range.pop('ymin', None)
+            last_range.pop('ymax', None)
+        elif "yaxis.range[0]" in relayout:
             ymin = float(relayout["yaxis.range[0]"])
             ymax = float(relayout["yaxis.range[1]"])
-            name = parameter2.split('/')[-1]
+            last_range["ymin"] = ymin
+            last_range["ymax"] = ymax
+            filtered = filtered.loc[(filtered[name] >= ymin) & (filtered[name] <= ymax)]
+        elif 'ymin' in last_range and 'ymax' in last_range:
+            ymin = last_range['ymin']
+            ymax = last_range['ymax']
             filtered = filtered.loc[(filtered[name] >= ymin) & (filtered[name] <= ymax)]
 
+    mi = filtered[names[0]].min()
+    ma = filtered[names[0]].max()
 
     kwargs = dict(marker_colorbar_thickness=24, marker_cmax=mi, marker_cmin=ma,
                   mode='markers',
@@ -446,7 +469,7 @@ def update_plotpol(st1, st2, source, parameter, relayout, parameter2, session_id
     )
     fig.update_polars(radialaxis_autorange=False, radialaxis_range=[90,0], angularaxis_direction='clockwise')
 
-    return fig
+    return fig, last_range
 
 
 if __name__ == "__main__":

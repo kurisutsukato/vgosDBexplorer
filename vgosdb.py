@@ -1,8 +1,10 @@
 import tarfile
 from functools import cached_property
 from io import BytesIO
-from pathlib import PurePosixPath
+from pathlib import PurePosixPath, Path
 from datetime import datetime
+from time import perf_counter
+import shutil
 
 import numpy as np
 import pandas as pd
@@ -95,9 +97,13 @@ class VGOSStation:
     def parameters(self):
         parameters = {}
         for dsname in self.datasets:
+
             ds = self[dsname]
+
             for var in ds.variables:
+                t1 = perf_counter()
                 tmp = ds.value(var)
+
                 if not np.isscalar(tmp) and tmp.shape[0] == len(self.utc):
                     if tmp.ndim > 1:
                         for n in range(tmp.shape[1]):
@@ -138,7 +144,8 @@ class VGOSSession:
 
     def __init__(self, archive_path):
 
-        self.archive_path = archive_path
+        self.archive_path = Path(archive_path)
+        self.extract_dir = self._extract_archive(self.archive_path)
 
         self._members = {}
         self._cache = {}
@@ -155,9 +162,129 @@ class VGOSSession:
 
         self._detect_stations()
         self._find_parameters()
-        
+
+    @staticmethod
+    def _extract_archive(archive_path):
+        """
+        Extract a .tgz/.tar.gz archive into a sibling directory.
+
+        The archive must contain exactly one top-level folder, which is
+        stripped during extraction.
+
+        Example:
+
+            session.tgz
+                session_root/
+                    Head.nc
+                    Observables/
+                    Wettzell/
+
+        becomes
+
+            session/
+                Head.nc
+                Observables/
+                Wettzell/
+
+        Returns
+        -------
+        Path
+            Path to the extracted directory.
+        """
+
+        archive_path = Path(archive_path)
+
+        if archive_path.name.endswith(".tar.gz"):
+            extract_dir = archive_path.parent / archive_path.name[:-7]
+        elif archive_path.suffix == ".tgz":
+            extract_dir = archive_path.with_suffix("")
+        else:
+            raise ValueError(f"Unsupported archive: {archive_path}")
+
+        marker = extract_dir / ".complete"
+
+        #
+        # already extracted
+        #
+        if marker.exists():
+            return extract_dir
+
+        #
+        # previous extraction failed
+        #
+        if extract_dir.exists():
+            shutil.rmtree(extract_dir)
+
+        extract_dir.mkdir(parents=True)
+
+        try:
+            with tarfile.open(archive_path, "r:gz") as tar:
+
+                members = tar.getmembers()
+
+                roots = {
+                    Path(m.name).parts[0]
+                    for m in members
+                    if m.name
+                }
+
+                if len(roots) != 1:
+                    raise RuntimeError(
+                        "Archive must contain exactly one top-level folder"
+                    )
+
+                root = roots.pop()
+
+                for member in members:
+
+                    p = Path(member.name)
+
+                    #
+                    # skip root directory itself
+                    #
+                    if len(p.parts) == 1:
+                        continue
+
+                    #
+                    # remove leading root folder
+                    #
+                    rel = Path(*p.parts[1:])
+
+                    #
+                    # sanity check
+                    #
+                    if ".." in rel.parts or rel.is_absolute():
+                        raise RuntimeError(
+                            f"Unsafe archive member: {member.name}"
+                        )
+
+                    target = extract_dir / rel
+
+                    if member.isdir():
+                        target.mkdir(parents=True, exist_ok=True)
+                        continue
+
+                    target.parent.mkdir(parents=True, exist_ok=True)
+
+                    with tar.extractfile(member) as src:
+                        with open(target, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+
+            marker.touch()
+
+        except Exception:
+            shutil.rmtree(extract_dir, ignore_errors=True)
+            raise
+
+        return extract_dir
 
     def _scan_archive(self):
+        self._members = {}
+
+        for path in self.extract_dir.rglob("*.nc"):
+            rel = path.relative_to(self.extract_dir)
+            self._members[str(rel.as_posix())] = path
+        return
 
         with tarfile.open(self.archive_path, "r:gz") as tar:
 
@@ -188,11 +315,7 @@ class VGOSSession:
         if path in self._cache:
             return self._cache[path]
 
-        with tarfile.open(self.archive_path, "r:gz") as tar:
-            member = self._members[path]
-            raw = tar.extractfile(member).read()
-
-        ds = xr.open_dataset(BytesIO(raw))
+        ds = xr.open_dataset(self._members[path])
         self.numobs = ds['NumObs'].values[0]
 
         wrapped = VGOSFile(path, ds, self.numobs)
@@ -201,6 +324,15 @@ class VGOSSession:
         return wrapped
 
     def _load_path(self, path):
+        if path in self._cache:
+            return self._cache[path]
+
+        ds = xr.open_dataset(self._members[path])
+
+        wrapped = VGOSFile(path, ds, self.numobs)
+        self._cache[path] = wrapped
+        return wrapped
+
         if path in self._cache:
             return self._cache[path]
 
@@ -274,8 +406,8 @@ class VGOSSession:
 
         for path in self._members:
 
-            p = PurePosixPath(path)
-            if len(p.parts) == 2 and p.name == "Head.nc":
+            p = Path(path)
+            if len(p.parts) == 1 and p.name == "Head.nc":
                 return path
 
         raise RuntimeError("Head.nc not found")
@@ -284,14 +416,12 @@ class VGOSSession:
         station_names = set(self.Head["StationList"])
 
         for path in self._members:
-
-            p = PurePosixPath(path)
-
-            rel = PurePosixPath(*p.parts[1:])
+            rel = PurePosixPath(path)
             parts = rel.parts
+
             filename = rel.stem
 
-            if len(parts) == 1:
+            if len(parts) == 1: # head.nc
                 self.datasets[str(rel)] = path
                 continue
 
@@ -335,6 +465,7 @@ class VGOSSession:
 
     def __getitem__(self, item):
         # top-level datasets
+
         if item in self.datasets:
             return self.load_dataset(item)
 
