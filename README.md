@@ -39,6 +39,8 @@ the parameter "Cal-SlantPathIonoGroup" in the session's "ObsDerived/Cal-SlantPat
 
 `dbexplorer.py` is useful for browsing the structure of a vgosDB file and inspecting the contents of the NetCDF files contained within it.
 
+![Screenshot](screenshot.png)
+
  
 
   
