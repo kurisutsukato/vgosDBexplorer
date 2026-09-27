@@ -382,6 +382,10 @@ class VGOSSession:
         apsrc = self['Apriori/Source']
         srclist = pd.DataFrame(np.hstack((apsrc.value('AprioriSourceList')[:,None], apsrc.value('AprioriSource2000RaDec'))),
                                     columns=['src','ra','dec']).astype({'src':str, 'ra': float, 'dec': float})
+
+        if bl.shape[0] == 1:
+            bl = np.repeat(bl, len(dt), axis=0)
+
         df = pd.DataFrame(data=np.vstack((dt, bl.T, src[None,:])).T, columns=['utc','st1','st2','src'])
 
         df = df.merge(srclist, on='src')
